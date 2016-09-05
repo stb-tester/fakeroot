@@ -80,7 +80,7 @@ void semaphore_down(){
   }
 }
 
-void send_fakem(const struct fake_msg *buf)
+void send_fakem(file_locator locator, const struct fake_msg *buf)
 {
   int r;
 
@@ -93,7 +93,7 @@ void send_fakem(const struct fake_msg *buf)
   }
 }
 
-void send_get_fakem(struct fake_msg *buf)
+void send_get_fakem(file_locator locator, struct fake_msg *buf)
 {
   /*
   send and get a struct fakestat from the daemon.
@@ -128,7 +128,7 @@ void send_get_fakem(struct fake_msg *buf)
     serial++;
     buf->serial=serial;
     buf->pid=pid;
-    send_fakem(buf);
+    send_fakem(locator, buf);
 
     do
       l=msgrcv(msg_get,
@@ -209,9 +209,9 @@ int fake_get_owner(int is_lstat, const char *key, const char *path,
   /* Now pass it to faked */
   get_ipc_key(atoi(key));
 #ifndef STUPID_ALPHA_HACK
-  send_get_stat(&st);
+  send_get_stat(FILELOC_DUMMY, &st);
 #else
-  send_get_stat(&st, _STAT_VER);
+  send_get_stat(FILELOC_DUMMY, &st, _STAT_VER);
 #endif
 
   /* Return the values inside the pointers */

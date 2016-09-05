@@ -169,13 +169,36 @@ typedef struct {
   int rc;
 } xattr_args;
 
+/* Sufficient information to allow opening a file (or performing other
+ * operations like stat), but generic enough so we don't need to open it
+ * ourselves.   This allows us to abstract over the differences between variants
+ * like stat, lstat, fstat and fstatat that take different parameters. */
+typedef struct {
+  /* A fd pointing to a directory that pathname should be taken relative to or
+   * AT_FDCWD for relative to the working directory.  If flags & AT_EMPTY_PATH
+   * and pathname is empty then this is a real fd.  dirfd can be -1 in which
+   * case this locator doesn't point anywhere. */
+  int dirfd;
+  const char* pathname;
+
+  /* flags can be:
+   *
+   *     AT_EMPTY_PATH: dirfd is actually a real fd
+   *     AT_SYMLINK_NOFOLLOW:
+   *         if pathname points to a symlink open that (like lstat)
+   */
+  int flags;
+} file_locator;
+
+static const file_locator FILELOC_DUMMY = {-1, 0, 0};
+
 #include "message.h"
 
 extern const char *env_var_set(const char *env);
-extern void send_stat(const struct stat *st, func_id_t f ALPHA_HACK_VERSION_PARAM);
-extern void send_fakem(const struct fake_msg *buf);
-extern void send_get_stat(struct stat *buf ALPHA_HACK_VERSION_PARAM);
-extern void send_get_xattr(struct stat *st, xattr_args *xattr ALPHA_HACK_VERSION_PARAM);
+extern void send_stat(const file_locator locator, const struct stat *st, func_id_t f ALPHA_HACK_VERSION_PARAM);
+extern void send_fakem(const file_locator locator, const struct fake_msg *buf);
+extern void send_get_stat(const file_locator locator, struct stat *buf ALPHA_HACK_VERSION_PARAM);
+extern void send_get_xattr(const file_locator locator, struct stat *st, xattr_args *xattr ALPHA_HACK_VERSION_PARAM);
 extern void cpyfakefake (struct fakestat *b1, const struct fakestat *b2);
 extern void cpystatfakem(struct     stat *st, const struct fake_msg *buf ALPHA_HACK_VERSION_PARAM);
 
@@ -192,9 +215,9 @@ extern void unlock_comm_sd(void);
 #endif /* FAKEROOT_FAKENET */
 
 #ifdef STAT64_SUPPORT
-extern void send_stat64(const struct stat64 *st, func_id_t f ALPHA_HACK_VERSION_PARAM);
-extern void send_get_stat64(struct stat64 *buf ALPHA_HACK_VERSION_PARAM);
-extern void send_get_xattr64(struct stat64 *st, xattr_args *xattr ALPHA_HACK_VERSION_PARAM);
+extern void send_stat64(const file_locator locator, const struct stat64 *st, func_id_t f ALPHA_HACK_VERSION_PARAM);
+extern void send_get_stat64(const file_locator locator, struct stat64 *buf ALPHA_HACK_VERSION_PARAM);
+extern void send_get_xattr64(const file_locator locator, struct stat64 *st, xattr_args *xattr ALPHA_HACK_VERSION_PARAM);
 extern void stat64from32(struct stat64 *s64, const struct stat *s32);
 extern void stat32from64(struct stat *s32, const struct stat64 *s64);
 #endif
@@ -205,6 +228,6 @@ extern int msg_get;
 extern int sem_id;
 #endif /* ! FAKEROOT_FAKENET */
 
-void send_get_fakem(struct fake_msg *buf);
+void send_get_fakem(const file_locator locator, struct fake_msg *buf);
 
 #endif

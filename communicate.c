@@ -347,21 +347,23 @@ void stat32from64(struct stat *s32, const struct stat64 *s64)
 
 #endif
 
-void send_stat(const struct stat *st,
-	       func_id_t f
-	       ALPHA_HACK_VERSION_PARAM){
+void send_stat(file_locator locator,
+               const struct stat *st,
+               func_id_t f
+               ALPHA_HACK_VERSION_PARAM){
   struct fake_msg buf;
 
   if(init_get_msg()!=-1)
   {
     cpyfakemstat(&buf,st ALPHA_HACK_VERSION);
     buf.id=f;
-    send_fakem(&buf);
+    send_fakem(locator, &buf);
   }
 }
 
 #ifdef STAT64_SUPPORT
-void send_stat64(const struct stat64 *st,
+void send_stat64(file_locator locator,
+                 const struct stat64 *st,
                  func_id_t f
                  ALPHA_HACK_VERSION_PARAM){
   struct fake_msg buf;
@@ -370,12 +372,13 @@ void send_stat64(const struct stat64 *st,
   {
     cpyfakemstat64(&buf,st ALPHA_HACK_VERSION);
     buf.id=f;
-    send_fakem(&buf);
+    send_fakem(locator, &buf);
   }
 }
 #endif /* STAT64_SUPPORT */
 
-void send_get_stat(struct stat *st
+void send_get_stat(file_locator locator,
+                   struct stat *st
                    ALPHA_HACK_VERSION_PARAM){
   struct fake_msg buf;
 
@@ -384,14 +387,15 @@ void send_get_stat(struct stat *st
     cpyfakemstat(&buf,st ALPHA_HACK_VERSION);
 
     buf.id=stat_func;
-    send_get_fakem(&buf);
+    send_get_fakem(locator, &buf);
     cpystatfakem(st,&buf ALPHA_HACK_VERSION);
   }
 }
 
-void send_get_xattr(struct stat *st
-		, xattr_args *xattr
-		ALPHA_HACK_VERSION_PARAM){
+void send_get_xattr(file_locator locator,
+                    struct stat *st,
+                    xattr_args *xattr
+                    ALPHA_HACK_VERSION_PARAM){
   struct fake_msg buf;
   size_t in_size;
   size_t name_size;
@@ -420,7 +424,7 @@ void send_get_xattr(struct stat *st
     buf.xattr.buffersize = total_size;
     buf.xattr.flags_rc = xattr->flags;
     buf.id=xattr->func;
-    send_get_fakem(&buf);
+    send_get_fakem(locator, &buf);
     xattr->rc = buf.xattr.flags_rc;
     xattr->size = buf.xattr.buffersize;
     if (buf.xattr.buffersize) {
@@ -438,7 +442,8 @@ void send_get_xattr(struct stat *st
 }
 
 #ifdef STAT64_SUPPORT
-void send_get_stat64(struct stat64 *st
+void send_get_stat64(file_locator locator,
+                     struct stat64 *st
                      ALPHA_HACK_VERSION_PARAM)
 {
   struct fake_msg buf;
@@ -448,14 +453,15 @@ void send_get_stat64(struct stat64 *st
     cpyfakemstat64(&buf,st ALPHA_HACK_VERSION);
 
     buf.id=stat_func;
-    send_get_fakem(&buf);
+    send_get_fakem(locator, &buf);
     cpystat64fakem(st,&buf ALPHA_HACK_VERSION);
   }
 }
 
-void send_get_xattr64(struct stat64 *st
-		, xattr_args *xattr
-		ALPHA_HACK_VERSION_PARAM){
+void send_get_xattr64(file_locator locator,
+                      struct stat64 *st,
+                      xattr_args *xattr
+                      ALPHA_HACK_VERSION_PARAM){
   struct fake_msg buf;
   size_t in_size;
   size_t name_size;
@@ -484,7 +490,7 @@ void send_get_xattr64(struct stat64 *st
     buf.xattr.buffersize = total_size;
     buf.xattr.flags_rc = xattr->flags;
     buf.id=xattr->func;
-    send_get_fakem(&buf);
+    send_get_fakem(locator, &buf);
     xattr->rc = buf.xattr.flags_rc;
     xattr->size = buf.xattr.buffersize;
     if (buf.xattr.buffersize) {

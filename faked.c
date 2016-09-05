@@ -473,7 +473,11 @@ static void faked_send_fakem(const struct fake_msg *buf)
 }
 #else
 
-# define faked_send_fakem send_fakem
+static void faked_send_fakem(const struct fake_msg *buf)
+{
+  file_locator dummy = {0};
+  send_fakem(dummy, buf);
+}
 
 #endif /* FAKEROOT_FAKENET */
 

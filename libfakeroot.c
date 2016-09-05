@@ -77,17 +77,17 @@
 #endif /* __APPLE__ */
 
 #ifdef STUPID_ALPHA_HACK
-#define SEND_STAT(a,b,c) send_stat(a,b,c)
-#define SEND_STAT64(a,b,c) send_stat64(a,b,c)
-#define SEND_GET_STAT(a,b) send_get_stat(a,b)
-#define SEND_GET_STAT64(a,b) send_get_stat64(a,b)
-#define SEND_GET_XATTR64(a,b,c) send_get_xattr64(a,b,c)
+#define SEND_STAT(l,a,b,c) send_stat(l,a,b,c)
+#define SEND_STAT64(l,a,b,c) send_stat64(l,a,b,c)
+#define SEND_GET_STAT(l,a,b) send_get_stat(l,a,b)
+#define SEND_GET_STAT64(l,a,b) send_get_stat64(l,a,b)
+#define SEND_GET_XATTR64(l,a,b,c) send_get_xattr64(l,a,b,c)
 #else
-#define SEND_STAT(a,b,c) send_stat(a,b)
-#define SEND_STAT64(a,b,c) send_stat64(a,b)
-#define SEND_GET_STAT(a,b) send_get_stat(a)
-#define SEND_GET_STAT64(a,b) send_get_stat64(a)
-#define SEND_GET_XATTR64(a,b,c) send_get_xattr64(a,b)
+#define SEND_STAT(l,a,b,c) send_stat(l,a,b)
+#define SEND_STAT64(l,a,b,c) send_stat64(l,a,b)
+#define SEND_GET_STAT(l,a,b) send_get_stat(l,a)
+#define SEND_GET_STAT64(l,a,b) send_get_stat64(l,a)
+#define SEND_GET_XATTR64(l,a,b,c) send_get_xattr64(l,a,b)
 #endif
 
 /*
@@ -100,16 +100,16 @@
 #define INT_NEXT_LSTAT(a,b) NEXT_LSTAT64(_STAT_VER,a,b)
 #define INT_NEXT_FSTAT(a,b) NEXT_FSTAT64(_STAT_VER,a,b)
 #define INT_NEXT_FSTATAT(a,b,c,d) NEXT_FSTATAT64(_STAT_VER,a,b,c,d)
-#define INT_SEND_STAT(a,b) SEND_STAT64(a,b,_STAT_VER)
-#define INT_SEND_GET_XATTR(a,b) SEND_GET_XATTR64(a,b,_STAT_VER)
+#define INT_SEND_STAT(l,a,b) SEND_STAT64(l,a,b,_STAT_VER)
+#define INT_SEND_GET_XATTR(l,a,b) SEND_GET_XATTR64(l,a,b,_STAT_VER)
 #else
 #define INT_STRUCT_STAT struct stat
 #define INT_NEXT_STAT(a,b) NEXT_STAT(_STAT_VER,a,b)
 #define INT_NEXT_LSTAT(a,b) NEXT_LSTAT(_STAT_VER,a,b)
 #define INT_NEXT_FSTAT(a,b) NEXT_FSTAT(_STAT_VER,a,b)
 #define INT_NEXT_FSTATAT(a,b,c,d) NEXT_FSTATAT(_STAT_VER,a,b,c,d)
-#define INT_SEND_STAT(a,b) SEND_STAT(a,b,_STAT_VER)
-#define INT_SEND_GET_XATTR(a,b) SEND_GET_XATTR(a,b,_STAT_VER)
+#define INT_SEND_STAT(l,a,b) SEND_STAT(l,a,b,_STAT_VER)
+#define INT_SEND_GET_XATTR(l,a,b) SEND_GET_XATTR(l,a,b,_STAT_VER)
 #endif
 
 #include <stdlib.h>
@@ -182,6 +182,45 @@ extern int unsetenv (const char *name);
 #undef __fxstat64
 #undef __lxstat64
 #undef _FILE_OFFSET_BITS
+
+/* Use with stat, chown, etc. */
+static inline file_locator loc(const char* filename)
+{
+  file_locator out = {AT_FDCWD, filename, 0};
+  return out;
+}
+
+/* Use with lstat, lchown, etc. */
+static inline file_locator lloc(const char* filename)
+{
+  file_locator out = {AT_FDCWD, filename, AT_SYMLINK_NOFOLLOW};
+  return out;
+}
+
+/* Use with fstat, fchown, etc. */
+static inline file_locator floc(int fd)
+{
+  file_locator out = {fd, "", AT_EMPTY_PATH};
+  return out;
+}
+
+/* Use with fstatat, fchownat, etc. */
+static inline file_locator flocat(int dirfd, const char *pathname, int flags)
+{
+  file_locator out = {
+      dirfd, pathname, flags & (AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW)};
+  return out;
+}
+
+#if HAVE_FTS_H
+/* Use with fts_children, fts_set, etc. */
+inline file_locator loc_fts(FTSENT* r)
+{
+  file_locator out = {AT_FDCWD, r->fts_accpath,
+                      r->fts_info == FTS_SLNONE ? AT_SYMLINK_NOFOLLOW : 0};
+  return out;
+}
+#endif /* HAVE_FTS_H */
 
 /*
 // next_wrap_st:
@@ -622,7 +661,7 @@ int WRAP_LSTAT LSTAT_ARG(int ver,
   r=NEXT_LSTAT(ver, file_name, statbuf);
   if(r)
     return -1;
-  SEND_GET_STAT(statbuf, ver);
+  SEND_GET_STAT(lloc(file_name), statbuf, ver);
   return 0;
 }
 
@@ -640,7 +679,7 @@ int WRAP_STAT STAT_ARG(int ver,
   r=NEXT_STAT(ver, file_name, st);
   if(r)
     return -1;
-  SEND_GET_STAT(st,ver);
+  SEND_GET_STAT(loc(file_name), st, ver);
   return 0;
 }
 
@@ -660,7 +699,7 @@ int WRAP_FSTAT FSTAT_ARG(int ver,
   r=NEXT_FSTAT(ver, fd, st);
   if(r)
     return -1;
-  SEND_GET_STAT(st,ver);
+  SEND_GET_STAT(floc(fd), st,ver);
   return 0;
 }
 
@@ -677,7 +716,7 @@ int WRAP_FSTATAT FSTATAT_ARG(int ver,
   r=NEXT_FSTATAT(ver, dir_fd, path, st, flags);
   if(r)
     return -1;
-  SEND_GET_STAT(st,ver);
+  SEND_GET_STAT(flocat(dir_fd, path, flags), st, ver);
   return 0;
 }
 #endif /* HAVE_FSTATAT */
@@ -700,7 +739,7 @@ int WRAP_LSTAT64 LSTAT64_ARG (int ver,
   if(r)
     return -1;
 
-  SEND_GET_STAT64(st,ver);
+  SEND_GET_STAT64(lloc(file_name), st, ver);
   return 0;
 }
 
@@ -718,7 +757,7 @@ int WRAP_STAT64 STAT64_ARG(int ver,
   r=NEXT_STAT64(ver,file_name,st);
   if(r)
     return -1;
-  SEND_GET_STAT64(st,ver);
+  SEND_GET_STAT64(loc(file_name), st, ver);
   return 0;
 }
 
@@ -736,7 +775,7 @@ int WRAP_FSTAT64 FSTAT64_ARG(int ver,
   r=NEXT_FSTAT64(ver, fd, st);
   if(r)
     return -1;
-  SEND_GET_STAT64(st,ver);
+  SEND_GET_STAT64(floc(fd), st,ver);
 
   return 0;
 }
@@ -754,7 +793,7 @@ int WRAP_FSTATAT64 FSTATAT64_ARG(int ver,
   r=NEXT_FSTATAT64(ver, dir_fd, path, st, flags);
   if(r)
     return -1;
-  SEND_GET_STAT64(st,ver);
+  SEND_GET_STAT64(flocat(dir_fd, path, flags), st,ver);
   return 0;
 }
 #endif /* HAVE_FSTATAT */
@@ -779,8 +818,6 @@ int WRAP_FSTATAT64 FSTATAT64_ARG(int ver,
 
 */
 /*************************************************************/
-
-
 
 /* chown, lchown, fchown, chmod, fchmod, mknod functions
 
@@ -811,7 +848,7 @@ int chown(const char *path, uid_t owner, gid_t group){
     return r;
   st.st_uid=owner;
   st.st_gid=group;
-  INT_SEND_STAT(&st,chown_func);
+  INT_SEND_STAT(loc(path), &st, chown_func);
   if(!dont_try_chown())
     r=next_lchown(path,owner,group);
   else
@@ -838,7 +875,7 @@ int lchown(const char *path, uid_t owner, gid_t group){
     return r;
   st.st_uid=owner;
   st.st_gid=group;
-  INT_SEND_STAT(&st,chown_func);
+  INT_SEND_STAT(lloc(path), &st,chown_func);
   if(!dont_try_chown())
     r=next_lchown(path,owner,group);
   else
@@ -860,7 +897,7 @@ int fchown(int fd, uid_t owner, gid_t group){
 
   st.st_uid=owner;
   st.st_gid=group;
-  INT_SEND_STAT(&st, chown_func);
+  INT_SEND_STAT(floc(fd), &st, chown_func);
 
   if(!dont_try_chown())
     r=next_fchown(fd,owner,group);
@@ -887,7 +924,7 @@ int fchownat(int dir_fd, const char *path, uid_t owner, gid_t group, int flags) 
 
   st.st_uid=owner;
   st.st_gid=group;
-  INT_SEND_STAT(&st,chown_func);
+  INT_SEND_STAT(flocat(dir_fd, path, flags), &st,chown_func);
 
   if(!dont_try_chown())
     r=next_fchownat(dir_fd,path,owner,group,flags);
@@ -917,7 +954,7 @@ int chmod(const char *path, mode_t mode){
 
   st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
 
-  INT_SEND_STAT(&st, chmod_func);
+  INT_SEND_STAT(loc(path), &st, chmod_func);
 
   /* if a file is unwritable, then root can still write to it
      (no matter who owns the file). If we are fakeroot, the only
@@ -957,7 +994,7 @@ int lchmod(const char *path, mode_t mode){
 
   st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
 
-  INT_SEND_STAT(&st, chmod_func);
+  INT_SEND_STAT(lloc(path), &st, chmod_func);
 
   /* see chmod() for comment */
   mode |= 0600;
@@ -991,7 +1028,7 @@ int fchmod(int fd, mode_t mode){
     return(r);
 
   st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-  INT_SEND_STAT(&st,chmod_func);
+  INT_SEND_STAT(floc(fd), &st,chmod_func);
 
   /* see chmod() for comment */
   mode |= 0600;
@@ -1023,7 +1060,7 @@ int fchmodat(int dir_fd, const char *path, mode_t mode, int flags) {
     return(r);
 
   st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-  INT_SEND_STAT(&st,chmod_func);
+  INT_SEND_STAT(flocat(dir_fd, path, flags), &st,chmod_func);
 
   /* see chmod() for comment */
   mode |= 0600;
@@ -1072,7 +1109,7 @@ int WRAP_MKNOD MKNOD_ARG(int ver UNUSED,
   st.st_mode= mode & ~old_mask;
   st.st_rdev= XMKNOD_FRTH_ARG dev;
 
-  INT_SEND_STAT(&st,mknod_func);
+  INT_SEND_STAT(loc(pathname), &st,mknod_func);
 
   return 0;
 }
@@ -1112,7 +1149,7 @@ int WRAP_MKNODAT MKNODAT_ARG(int ver UNUSED,
   st.st_mode= mode & ~old_mask;
   st.st_rdev= XMKNODAT_FIFTH_ARG dev;
 
-  INT_SEND_STAT(&st,mknod_func);
+  INT_SEND_STAT(flocat(dir_fd, pathname, 0), &st,mknod_func);
 
   return 0;
 }
@@ -1147,7 +1184,7 @@ int mkdir(const char *path, mode_t mode){
 
   st.st_mode=(mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR;
 
-  INT_SEND_STAT(&st, chmod_func);
+  INT_SEND_STAT(loc(path), &st, chmod_func);
 
   return 0;
 }
@@ -1177,7 +1214,7 @@ int mkdirat(int dir_fd, const char *path, mode_t mode){
 
   st.st_mode=(mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR;
 
-  INT_SEND_STAT(&st, chmod_func);
+  INT_SEND_STAT(flocat(dir_fd, path, 0), &st, chmod_func);
 
   return 0;
 }
@@ -1213,7 +1250,7 @@ int unlink(const char *pathname){
   if(r)
     return -1;
 
-  INT_SEND_STAT(&st, unlink_func);
+  INT_SEND_STAT(loc(pathname), &st, unlink_func);
 
   return 0;
 }
@@ -1232,7 +1269,7 @@ int unlinkat(int dir_fd, const char *pathname, int flags){
   if(r)
     return -1;
 
-  INT_SEND_STAT(&st, unlink_func);
+  INT_SEND_STAT(flocat(dir_fd, pathname, flags | AT_SYMLINK_NOFOLLOW), &st, unlink_func);
 
   return 0;
 }
@@ -1254,7 +1291,7 @@ int rmdir(const char *pathname){
   if(r)
     return -1;
 
-  INT_SEND_STAT(&st,unlink_func);
+  INT_SEND_STAT(loc(pathname), &st,unlink_func);
 
   return 0;
 }
@@ -1273,7 +1310,7 @@ int remove(const char *pathname){
   r=next_remove(pathname);
   if(r)
     return -1;
-  INT_SEND_STAT(&st,unlink_func);
+  INT_SEND_STAT(loc(pathname), &st,unlink_func);
 
   return r;
 }
@@ -1303,7 +1340,7 @@ int rename(const char *oldpath, const char *newpath){
   if(s)
     return -1;
   if(!r)
-    INT_SEND_STAT(&st,unlink_func);
+    INT_SEND_STAT(loc(newpath), &st,unlink_func);
 
   return 0;
 }
@@ -1327,7 +1364,8 @@ int renameat(int olddir_fd, const char *oldpath,
   if(s)
     return -1;
   if(!r)
-    INT_SEND_STAT(&st,unlink_func);
+    INT_SEND_STAT(flocat(newdir_fd, newpath, AT_SYMLINK_NOFOLLOW), &st,
+                  unlink_func);
 
   return 0;
 }
@@ -1570,7 +1608,7 @@ int capset(cap_user_header_t hdrp, const cap_user_data_t datap)
 #endif /* HAVE_CAPSET */
 
 #if defined(HAVE_SETXATTR) || defined(HAVE_LSETXATTR) || defined(HAVE_FSETXATTR)
-static size_t common_setxattr(INT_STRUCT_STAT *st, const char *name, void * value, size_t size, int flags)
+static size_t common_setxattr(file_locator locator, INT_STRUCT_STAT *st, const char *name, void * value, size_t size, int flags)
 {
   xattr_args xattr;
   xattr.name = name;
@@ -1578,7 +1616,7 @@ static size_t common_setxattr(INT_STRUCT_STAT *st, const char *name, void * valu
   xattr.size = size;
   xattr.flags = flags;
   xattr.func = setxattr_func;
-  INT_SEND_GET_XATTR(st, &xattr);
+  INT_SEND_GET_XATTR(locator, st, &xattr);
   if (xattr.rc)
   {
     errno = xattr.rc;
@@ -1589,14 +1627,14 @@ static size_t common_setxattr(INT_STRUCT_STAT *st, const char *name, void * valu
 #endif /* defined(HAVE_SETXATTR) || defined(HAVE_LSETXATTR) || defined(HAVE_FSETXATTR) */
 
 #if defined(HAVE_GETXATTR) || defined(HAVE_LGETXATTR) || defined(HAVE_FGETXATTR)
-static size_t common_getxattr(INT_STRUCT_STAT *st, const char *name, void * value, size_t size)
+static size_t common_getxattr(file_locator locator, INT_STRUCT_STAT *st, const char *name, void * value, size_t size)
 {
   xattr_args xattr;
   xattr.name = name;
   xattr.value = value;
   xattr.size = size;
   xattr.func = getxattr_func;
-  INT_SEND_GET_XATTR(st, &xattr);
+  INT_SEND_GET_XATTR(locator, st, &xattr);
   if (xattr.rc)
   {
     errno = xattr.rc;
@@ -1607,14 +1645,14 @@ static size_t common_getxattr(INT_STRUCT_STAT *st, const char *name, void * valu
 #endif /* defined(HAVE_GETXATTR) || defined(HAVE_LGETXATTR) || defined(HAVE_FGETXATTR) */
 
 #if defined(HAVE_LISTXATTR) || defined(HAVE_LLISTXATTR) || defined(HAVE_FLISTXATTR)
-static size_t common_listxattr(INT_STRUCT_STAT *st, char *list, size_t size)
+static size_t common_listxattr(file_locator locator, INT_STRUCT_STAT *st, char *list, size_t size)
 {
   xattr_args xattr;
   xattr.name = NULL;
   xattr.value = list;
   xattr.size = size;
   xattr.func = listxattr_func;
-  INT_SEND_GET_XATTR(st, &xattr);
+  INT_SEND_GET_XATTR(locator, st, &xattr);
   if (xattr.rc)
   {
     errno = xattr.rc;
@@ -1625,14 +1663,14 @@ static size_t common_listxattr(INT_STRUCT_STAT *st, char *list, size_t size)
 #endif /* defined(HAVE_LISTXATTR) || defined(HAVE_LLISTXATTR) || defined(HAVE_FLISTXATTR) */
 
 #if defined(HAVE_REMOVEXATTR) || defined(HAVE_LREMOVEXATTR) || defined(HAVE_FREMOVEXATTR)
-static size_t common_removexattr(INT_STRUCT_STAT *st, const char *name)
+static size_t common_removexattr(file_locator locator, INT_STRUCT_STAT *st, const char *name)
 {
   xattr_args xattr;
   xattr.name = name;
   xattr.value = NULL;
   xattr.size = 0;
   xattr.func = removexattr_func;
-  INT_SEND_GET_XATTR(st, &xattr);
+  INT_SEND_GET_XATTR(locator, st, &xattr);
   if (xattr.rc)
   {
     errno = xattr.rc;
@@ -1659,7 +1697,7 @@ ssize_t setxattr(const char *path, const char *name, void *value, size_t size, i
   if(r)
     return r;
 
-  return common_setxattr(&st, name, value, size, flags);
+  return common_setxattr(loc(path), &st, name, value, size, flags);
 }
 #endif /* HAVE_SETXATTR */
 
@@ -1680,7 +1718,7 @@ ssize_t lsetxattr(const char *path, const char *name, void *value, size_t size, 
   if(r)
     return r;
 
-  return common_setxattr(&st, name, value, size, flags);
+  return common_setxattr(lloc(path), &st, name, value, size, flags);
 }
 #endif /* HAVE_LSETXATTR */
 
@@ -1701,7 +1739,7 @@ ssize_t fsetxattr(int fd, const char *name, void *value, size_t size, int flags)
   if(r)
     return r;
 
-  return common_setxattr(&st, name, value, size, flags);
+  return common_setxattr(floc(fd), &st, name, value, size, flags);
 }
 #endif /* HAVE_FSETXATTR */
 
@@ -1722,7 +1760,7 @@ ssize_t getxattr(const char *path, const char *name, void *value, size_t size)
   if(r)
     return r;
 
-  return common_getxattr(&st, name, value, size);
+  return common_getxattr(loc(path), &st, name, value, size);
 }
 #endif /* HAVE_GETXATTR */
 
@@ -1743,7 +1781,7 @@ ssize_t lgetxattr(const char *path, const char *name, void *value, size_t size)
   if(r)
     return r;
 
-  return common_getxattr(&st, name, value, size);
+  return common_getxattr(lloc(path), &st, name, value, size);
 }
 #endif /* HAVE_LGETXATTR */
 
@@ -1764,7 +1802,7 @@ ssize_t fgetxattr(int fd, const char *name, void *value, size_t size)
   if(r)
     return r;
 
-  return common_getxattr(&st, name, value, size);
+  return common_getxattr(floc(fd), &st, name, value, size);
 }
 #endif /* HAVE_FGETXATTR */
 
@@ -1785,7 +1823,7 @@ ssize_t listxattr(const char *path, char *list, size_t size)
   if(r)
     return r;
 
-  return common_listxattr(&st, list, size);
+  return common_listxattr(loc(path), &st, list, size);
 }
 #endif /* HAVE_LISTXATTR */
 
@@ -1806,7 +1844,7 @@ ssize_t llistxattr(const char *path, char *list, size_t size)
   if(r)
     return r;
 
-  return common_listxattr(&st, list, size);
+  return common_listxattr(lloc(path), &st, list, size);
 }
 #endif /* HAVE_LLISTXATTR */
 
@@ -1827,7 +1865,7 @@ ssize_t flistxattr(int fd, char *list, size_t size)
   if(r)
     return r;
 
-  return common_listxattr(&st, list, size);
+  return common_listxattr(floc(fd), &st, list, size);
 }
 #endif /* HAVE_FLISTXATTR */
 
@@ -1848,7 +1886,7 @@ ssize_t removexattr(const char *path, const char *name)
   if(r)
     return r;
 
-  return common_removexattr(&st, name);
+  return common_removexattr(loc(path), &st, name);
 }
 #endif /* HAVE_REMOVEXATTR */
 
@@ -1869,7 +1907,7 @@ ssize_t lremovexattr(const char *path, const char *name)
   if(r)
     return r;
 
-  return common_removexattr(&st, name);
+  return common_removexattr(lloc(path), &st, name);
 }
 #endif /* HAVE_LREMOVEXATTR */
 
@@ -1890,7 +1928,7 @@ ssize_t fremovexattr(int fd, const char *name)
   if(r)
     return r;
 
-  return common_removexattr(&st, name);
+  return common_removexattr(floc(fd), &st, name);
 }
 #endif /* HAVE_FREMOVEXATTR */
 
@@ -1950,9 +1988,9 @@ FTSENT *fts_read(FTS *ftsp) {
     r->fts_statp = NULL;  /* Otherwise fts_statp may be a random pointer */
   if(r && r->fts_statp) {  /* Should we bother checking fts_info here? */
 # if defined(STAT64_SUPPORT) && !defined(__APPLE__)
-    SEND_GET_STAT64(r->fts_statp, _STAT_VER);
+    SEND_GET_STAT64(loc_fts(r), r->fts_statp, _STAT_VER);
 # else
-    SEND_GET_STAT(r->fts_statp, _STAT_VER);
+    SEND_GET_STAT(loc_fts(r), r->fts_statp, _STAT_VER);
 # endif
   }
 
@@ -1973,9 +2011,9 @@ FTSENT *fts_children(FTS *ftsp, int options) {
   for(r = first; r; r = r->fts_link) {
     if(r && r->fts_statp) {  /* Should we bother checking fts_info here? */
 # if defined(STAT64_SUPPORT) && !defined(__APPLE__)
-      SEND_GET_STAT64(r->fts_statp, _STAT_VER);
+      SEND_GET_STAT64(loc_fts(r), r->fts_statp, _STAT_VER);
 # else
-      SEND_GET_STAT(r->fts_statp, _STAT_VER);
+      SEND_GET_STAT(loc_fts(r), r->fts_statp, _STAT_VER);
 # endif
     }
   }

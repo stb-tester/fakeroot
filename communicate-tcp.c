@@ -194,7 +194,7 @@ static void send_fakem_nr(const struct fake_msg *buf)
   }
 }
 
-void send_fakem(const struct fake_msg *buf)
+void send_fakem(file_locator locator, const struct fake_msg *buf)
 {
   lock_comm_sd();
 
@@ -234,7 +234,7 @@ static void get_fakem_nr(struct fake_msg *buf)
   buf->xattr.flags_rc = ntohl(buf->xattr.flags_rc);
 }
 
-void send_get_fakem(struct fake_msg *buf)
+void send_get_fakem(file_locator locator, struct fake_msg *buf)
 {
   lock_comm_sd();
 
