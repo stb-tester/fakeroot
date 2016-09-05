@@ -687,13 +687,13 @@ int load_database(const uint32_t remote)
 /*********************************/
 void debug_stat(const struct fakestat *st){
   fprintf(stderr,"dev:ino=(%llx:%lli), mode=0%lo, own=(%li,%li), nlink=%li, rdev=%lli\n",
-	  st->dev,
-	  st->ino,
+	  (long long unsigned) st->dev,
+	  (long long int) st->ino,
 	  (long)st->mode,
 	  (long)st->uid,
 	  (long)st->gid,
 	  (long)st->nlink,
-	  st->rdev);
+	  (long long int)st->rdev);
 }
 
 void insert_or_overwrite(struct fakestat *st,
@@ -791,7 +791,7 @@ void process_chmod(struct fake_msg *buf){
     */
 
     if ((buf->st.mode&S_IFMT) != (st->mode&S_IFMT) &&
-        ((buf->st.mode&S_IFMT) != S_IFREG || (!st->mode&(S_IFBLK|S_IFCHR)))) {
+        ((buf->st.mode&S_IFMT) != S_IFREG || !(st->mode&(S_IFBLK|S_IFCHR)))) {
       fprintf(stderr,"FAKEROOT: chmod mode=%lo incompatible with "
               "existing mode=%lo\n", (unsigned long)buf->st.mode, (unsigned long)st->mode);
       st->mode = buf->st.mode;
@@ -925,8 +925,6 @@ void process_setxattr(struct fake_msg *buf)
 #if defined(HAVE_SETXATTR) || defined(HAVE_LSETXATTR) || defined(HAVE_FSETXATTR)
   data_node_t *i;
   xattr_node_t *x = NULL;
-  xattr_node_t **x_ref = NULL;
-  xattr_node_t *new_node = NULL;
   struct fakestat st;
   char *value = NULL;
   int key_size, value_size;
@@ -1083,9 +1081,10 @@ void get_msg()
     r=msgrcv(msg_get,&buf,sizeof(struct fake_msg),0,0);
     if(debug)
       fprintf(stderr,"FAKEROOT: r=%i, received message type=%li, message=%i\n",r,buf.mtype,buf.id);
-    if(r!=-1)
+    if(r!=-1) {
       buf.remote = 0;
       process_msg(&buf);
+    }
   }while ((r!=-1)||(errno==EINTR));
   if(debug){
     perror("FAKEROOT, get_msg");

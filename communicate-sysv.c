@@ -118,7 +118,7 @@ void send_get_fakem(file_locator locator, struct fake_msg *buf)
   there will always be some (small) chance it will go wrong.
   */
 
-  int l;
+  int l UNUSED;
   pid_t pid;
   static int serial=0;
 
