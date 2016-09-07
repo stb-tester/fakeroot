@@ -183,6 +183,60 @@ extern int unsetenv (const char *name);
 #undef __lxstat64
 #undef _FILE_OFFSET_BITS
 
+static void send_get_stat(file_locator locator, struct stat *st)
+{
+  int fd = -1;
+  ssize_t size;
+  unsigned char sbuf[20], *mbuf = NULL;
+  uint32_t buf[3];
+
+  fd = loc_open(locator, O_RDONLY);
+  if (fd < 0)
+    goto nostat;
+  if (fread_ostreemeta(fd, buf) != 0)
+    goto nostat;
+
+  st.st_uid = ntohl(buf[0]);
+  st.st_gid = ntohl(buf[1]);
+  st.st_mode = ntohl(buf[2]);
+out:
+  if (ofd >= 0)
+    close (ofd);
+  return;
+nostat:
+  st.st_uid = 0;
+  st.st_gid = 0;
+  goto out;
+}
+
+static void send_chown(file_locator loc, struct stat *orig, uid_t owner, gid_t group)
+{
+  st->st_uid=owner;
+  st->st_gid=group;
+  INT_SEND_STAT(loc(path), &st, chown_func);
+}
+
+static void send_chmod(file_locator locator, struct stat *orig, const char *path,
+                mode_t mode)
+{
+  st.st_mode=(*mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
+
+  INT_SEND_STAT(locator, &st, chmod_func);
+}
+
+static void send_mknod(file_locator locator, struct stat *st, mode_t mode, dev_t dev)
+{
+  st->st_mode = mode & ~old_mask;
+  st->st_rdev = dev;
+
+  INT_SEND_STAT(loc(pathname), &st,mknod_func);
+}
+
+static void send_unlink(file_locator locator, struct stat *st)
+{
+  INT_SEND_STAT(locator, st, unlink_func);
+}
+
 /* Use with stat, chown, etc. */
 static inline file_locator loc(const char* filename)
 {
@@ -846,9 +900,7 @@ int chown(const char *path, uid_t owner, gid_t group){
 
   if(r)
     return r;
-  st.st_uid=owner;
-  st.st_gid=group;
-  INT_SEND_STAT(loc(path), &st, chown_func);
+  send_chown(loc(path), &st, owner, group);
   if(!dont_try_chown())
     r=next_lchown(path,owner,group);
   else
@@ -873,9 +925,7 @@ int lchown(const char *path, uid_t owner, gid_t group){
   r=INT_NEXT_LSTAT(path, &st);
   if(r)
     return r;
-  st.st_uid=owner;
-  st.st_gid=group;
-  INT_SEND_STAT(lloc(path), &st,chown_func);
+  send_chown(lloc(path), &st, owner, group);
   if(!dont_try_chown())
     r=next_lchown(path,owner,group);
   else
@@ -895,9 +945,7 @@ int fchown(int fd, uid_t owner, gid_t group){
   if(r)
     return r;
 
-  st.st_uid=owner;
-  st.st_gid=group;
-  INT_SEND_STAT(floc(fd), &st, chown_func);
+  send_chown(floc(fd), &st, owner, group);
 
   if(!dont_try_chown())
     r=next_fchown(fd,owner,group);
@@ -922,9 +970,7 @@ int fchownat(int dir_fd, const char *path, uid_t owner, gid_t group, int flags) 
   if(r)
     return(r);
 
-  st.st_uid=owner;
-  st.st_gid=group;
-  INT_SEND_STAT(flocat(dir_fd, path, flags), &st,chown_func);
+  send_chown(flocat(dir_fd, path, flags), &st, owner, group);
 
   if(!dont_try_chown())
     r=next_fchownat(dir_fd,path,owner,group,flags);
@@ -952,10 +998,7 @@ int chmod(const char *path, mode_t mode){
   if(r)
     return r;
 
-  st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-
-  INT_SEND_STAT(loc(path), &st, chmod_func);
-
+  send_chmod(loc(path), &st, mode);
   /* if a file is unwritable, then root can still write to it
      (no matter who owns the file). If we are fakeroot, the only
      way to fake this is to always make the file writable, readable
@@ -992,10 +1035,7 @@ int lchmod(const char *path, mode_t mode){
   if(r)
     return r;
 
-  st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-
-  INT_SEND_STAT(lloc(path), &st, chmod_func);
-
+  send_chmod(lloc(path), &st, &mode);
   /* see chmod() for comment */
   mode |= 0600;
   if(S_ISDIR(st.st_mode))
@@ -1027,9 +1067,7 @@ int fchmod(int fd, mode_t mode){
   if(r)
     return(r);
 
-  st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-  INT_SEND_STAT(floc(fd), &st,chmod_func);
-
+  send_chmod(floc(fd), &st, mode);
   /* see chmod() for comment */
   mode |= 0600;
   if(S_ISDIR(st.st_mode))
@@ -1059,9 +1097,7 @@ int fchmodat(int dir_fd, const char *path, mode_t mode, int flags) {
   if(r)
     return(r);
 
-  st.st_mode=(mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-  INT_SEND_STAT(flocat(dir_fd, path, flags), &st,chmod_func);
-
+  send_chmod(flocat(dir_fd, path, flags), &st, mode);
   /* see chmod() for comment */
   mode |= 0600;
   if(S_ISDIR(st.st_mode))
@@ -1106,10 +1142,7 @@ int WRAP_MKNOD MKNOD_ARG(int ver UNUSED,
   if(r)
     return -1;
 
-  st.st_mode= mode & ~old_mask;
-  st.st_rdev= XMKNOD_FRTH_ARG dev;
-
-  INT_SEND_STAT(loc(pathname), &st,mknod_func);
+  send_mknod(lloc(pathname), &st, mode, dev);
 
   return 0;
 }
@@ -1146,10 +1179,7 @@ int WRAP_MKNODAT MKNODAT_ARG(int ver UNUSED,
   if(r)
     return -1;
 
-  st.st_mode= mode & ~old_mask;
-  st.st_rdev= XMKNODAT_FIFTH_ARG dev;
-
-  INT_SEND_STAT(flocat(dir_fd, pathname, 0), &st,mknod_func);
+  send_mknod(flocat(dir_fd, pathname, 0), &st, mode, dev);
 
   return 0;
 }
@@ -1182,9 +1212,7 @@ int mkdir(const char *path, mode_t mode){
   if(r)
     return -1;
 
-  st.st_mode=(mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR;
-
-  INT_SEND_STAT(loc(path), &st, chmod_func);
+  send_chmod(loc(path), &st, (mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR);
 
   return 0;
 }
@@ -1212,9 +1240,8 @@ int mkdirat(int dir_fd, const char *path, mode_t mode){
   if(r)
     return -1;
 
-  st.st_mode=(mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR;
-
-  INT_SEND_STAT(flocat(dir_fd, path, 0), &st, chmod_func);
+  send_chmod(flocat(dir_fd, path, 0), &st,
+             (mode&~old_mask&ALLPERMS)|(st.st_mode&~ALLPERMS)|S_IFDIR);
 
   return 0;
 }
@@ -1250,7 +1277,7 @@ int unlink(const char *pathname){
   if(r)
     return -1;
 
-  INT_SEND_STAT(loc(pathname), &st, unlink_func);
+  send_unlink(loc(pathname), &st);
 
   return 0;
 }
@@ -1269,7 +1296,7 @@ int unlinkat(int dir_fd, const char *pathname, int flags){
   if(r)
     return -1;
 
-  INT_SEND_STAT(flocat(dir_fd, pathname, flags | AT_SYMLINK_NOFOLLOW), &st, unlink_func);
+  send_unlink(flocat(dir_fd, pathname, flags | AT_SYMLINK_NOFOLLOW), &st);
 
   return 0;
 }
@@ -1291,7 +1318,7 @@ int rmdir(const char *pathname){
   if(r)
     return -1;
 
-  INT_SEND_STAT(loc(pathname), &st,unlink_func);
+  send_unlink(loc(pathname), &st);
 
   return 0;
 }
@@ -1310,7 +1337,7 @@ int remove(const char *pathname){
   r=next_remove(pathname);
   if(r)
     return -1;
-  INT_SEND_STAT(loc(pathname), &st,unlink_func);
+  send_unlink(loc(pathname), &st);
 
   return r;
 }
@@ -1340,7 +1367,7 @@ int rename(const char *oldpath, const char *newpath){
   if(s)
     return -1;
   if(!r)
-    INT_SEND_STAT(loc(newpath), &st,unlink_func);
+    send_unlink(loc(newpath), &st);
 
   return 0;
 }
@@ -1364,8 +1391,7 @@ int renameat(int olddir_fd, const char *oldpath,
   if(s)
     return -1;
   if(!r)
-    INT_SEND_STAT(flocat(newdir_fd, newpath, AT_SYMLINK_NOFOLLOW), &st,
-                  unlink_func);
+    send_unlink(flocat(newdir_fd, newpath, AT_SYMLINK_NOFOLLOW), &st);
 
   return 0;
 }
