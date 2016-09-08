@@ -183,6 +183,12 @@ extern int unsetenv (const char *name);
 #undef __lxstat64
 #undef _FILE_OFFSET_BITS
 
+#ifdef LIBFAKEROOT_DEBUGGING
+int fakeroot_debug = 0;
+#else
+#define fakeroot_debug 0
+#endif /* LIBFAKEROOT_DEBUGGING */
+
 #include "ostree.c"
 
 /* Use with stat, chown, etc. */
@@ -254,9 +260,6 @@ void *get_libc(){
 void load_library_symbols(void);
 
 int fakeroot_disabled = 0;
-#ifdef LIBFAKEROOT_DEBUGGING
-int fakeroot_debug = 0;
-#endif /* LIBFAKEROOT_DEBUGGING */
 
 #ifdef __APPLE__
 #include "patchattr.h"

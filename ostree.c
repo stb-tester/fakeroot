@@ -51,12 +51,46 @@ static int loc_setxattr(file_locator locator,
   }
 }
 
-static int fread_ostreemeta(int fd, uint32_t *buf)
+static ssize_t loc_getxattr(file_locator locator,
+                            const char *name,
+                            void *value,
+                            size_t size)
+{
+  if (fakeroot_debug)
+    fprintf(stderr, "loc_getxattr(" LOC_FMT ", %s, ..., %i)\n",
+            LOC_FARG(locator), name, (int) size);
+  /* There is no fgetxattrat so we implement it ourselves here.  We try to avoid
+   * the openat path if possible so there's less that can go wrong. */
+  if (locator.flags & AT_EMPTY_PATH &&
+      strcmp("", locator.pathname) == 0 &&
+      locator.dirfd != AT_FDCWD) {
+    return fgetxattr(locator.dirfd, name, value, size);
+  } else if (locator.dirfd == AT_FDCWD) {
+    if (locator.flags & AT_SYMLINK_NOFOLLOW) {
+      return lgetxattr(locator.pathname, name, value, size);
+    } else {
+      return getxattr(locator.pathname, name, value, size);
+    }
+  }
+  else {
+    int r;
+    int fd = openat(locator.dirfd, locator.pathname, locator.flags | O_CLOEXEC);
+    if (fd < 0) {
+      perror("FAKEROOT: write_ostreemeta failed: Couldn't open locator");
+      return -1;
+    }
+    r = fgetxattr(fd, name, value, size);
+    close (fd);
+    return r;
+  }
+}
+
+static int read_ostreemeta(file_locator locator, uint32_t *buf)
 {
   unsigned char sbuf[40];
   ssize_t size;
 
-  size = fgetxattr(fd, "user.ostreemeta", sbuf, sizeof (sbuf));
+  size = loc_getxattr(locator, "user.ostreemeta", sbuf, sizeof (sbuf));
   if (size > 0 && size >= (ssize_t) 3 * sizeof(uint32_t)) {
     memcpy (buf, sbuf, 3 * sizeof(uint32_t));
     return 0;
@@ -73,28 +107,20 @@ static int fread_ostreemeta(int fd, uint32_t *buf)
 
 void send_get_stat_int(file_locator locator, INT_STRUCT_STAT *st)
 {
-  int fd = -1;
   uint32_t buf[3];
 
-  fd = loc_open(locator, O_RDONLY);
-  if (fd < 0)
-    goto nostat;
-  if (fread_ostreemeta(fd, buf) != 0)
-    goto nostat;
-
-  st->st_uid = ntohl(buf[0]);
-  st->st_gid = ntohl(buf[1]);
-  st->st_mode = ntohl(buf[2]);
-
-out:
-  if (fd >= 0)
-    close (fd);
-
-  return;
-nostat:
-  st->st_uid = 0;
-  st->st_gid = 0;
-  goto out;
+  if (read_ostreemeta(locator, buf) == 0) {
+    st->st_uid = ntohl(buf[0]);
+    st->st_gid = ntohl(buf[1]);
+    st->st_mode = ntohl(buf[2]);
+  } else {
+    st->st_uid = 0;
+    st->st_gid = 0;
+  }
+  if (fakeroot_debug)
+    fprintf(stderr, "send_get_stat_int(" LOC_FMT ") -> uid: %i, gid: %i, "
+            "mode: %o\n", LOC_FARG(locator), (int) st->st_uid, (int) st->st_gid,
+            (int) st->st_mode);
 }
 
 void send_get_stat(file_locator locator, struct stat *st)

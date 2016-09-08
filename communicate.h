@@ -190,6 +190,9 @@ typedef struct {
   int flags;
 } file_locator;
 
+#define LOC_FMT "flocat(%i, \"%s\", %x)"
+#define LOC_FARG(x) x.dirfd, x.pathname, x.flags
+
 static const file_locator FILELOC_DUMMY = {-1, 0, 0};
 
 #include "message.h"
