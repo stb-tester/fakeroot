@@ -951,7 +951,7 @@ int fchownat(int dir_fd, const char *path, uid_t owner, gid_t group, int flags) 
 
 int chmod(const char *path, mode_t mode){
   INT_STRUCT_STAT st;
-  int r;
+  int r, realmode = mode;
 
 #ifdef LIBFAKEROOT_DEBUGGING
   if (fakeroot_debug) {
@@ -962,7 +962,6 @@ int chmod(const char *path, mode_t mode){
   if(r)
     return r;
 
-  send_chmod(loc(path), &st, mode);
   /* if a file is unwritable, then root can still write to it
      (no matter who owns the file). If we are fakeroot, the only
      way to fake this is to always make the file writable, readable
@@ -971,24 +970,25 @@ int chmod(const char *path, mode_t mode){
      Yes, packages requering that are broken. But we have lintian
      to get rid of broken packages, not fakeroot.
   */
-  mode |= 0600;
+  realmode |= 0600;
   if(S_ISDIR(st.st_mode))
-    mode |= 0100;
+    realmode |= 0100;
 
-  r=next_chmod(path, mode);
+  r=next_chmod(path, realmode);
   if(r&&(errno==EPERM))
     r=0;
 #ifdef EFTYPE		/* available under FreeBSD kernel */
   if(r&&(errno==EFTYPE))
     r=0;
 #endif
+  send_chmod(loc(path), &st, mode);
   return r;
 }
 
 #ifdef HAVE_LCHMOD
 int lchmod(const char *path, mode_t mode){
+  int r, realmode=mode;
   INT_STRUCT_STAT st;
-  int r;
 
 #ifdef LIBFAKEROOT_DEBUGGING
   if (fakeroot_debug) {
@@ -999,25 +999,25 @@ int lchmod(const char *path, mode_t mode){
   if(r)
     return r;
 
-  send_chmod(lloc(path), &st, &mode);
   /* see chmod() for comment */
-  mode |= 0600;
+  realmode |= 0600;
   if(S_ISDIR(st.st_mode))
-    mode |= 0100;
+    realmode |= 0100;
 
-  r=next_lchmod(path, mode);
+  r=next_lchmod(path, realmode);
   if(r&&(errno==EPERM))
     r=0;
 #ifdef EFTYPE		/* available under FreeBSD kernel */
   if(r&&(errno==EFTYPE))
     r=0;
 #endif
+  send_chmod(lloc(path), &st, mode);
   return r;
 }
 #endif
 
 int fchmod(int fd, mode_t mode){
-  int r;
+  int r, realmode=mode;
   INT_STRUCT_STAT st;
 
 
@@ -1031,19 +1031,19 @@ int fchmod(int fd, mode_t mode){
   if(r)
     return(r);
 
-  send_chmod(floc(fd), &st, mode);
   /* see chmod() for comment */
-  mode |= 0600;
+  realmode |= 0600;
   if(S_ISDIR(st.st_mode))
-    mode |= 0100;
+    realmode |= 0100;
 
-  r=next_fchmod(fd, mode);
+  r=next_fchmod(fd, realmode);
   if(r&&(errno==EPERM))
     r=0;
 #ifdef EFTYPE		/* available under FreeBSD kernel */
   if(r&&(errno==EFTYPE))
     r=0;
 #endif
+  send_chmod(floc(fd), &st, mode);
   return r;
 }
 
@@ -1051,7 +1051,7 @@ int fchmod(int fd, mode_t mode){
 #ifdef HAVE_FCHMODAT
 int fchmodat(int dir_fd, const char *path, mode_t mode, int flags) {
 /*   (int fd, mode_t mode){*/
-  int r;
+  int r, realmode=mode;
   INT_STRUCT_STAT st;
 
   /* If AT_SYMLINK_NOFOLLOW is set in the fchownat call it should
@@ -1061,19 +1061,19 @@ int fchmodat(int dir_fd, const char *path, mode_t mode, int flags) {
   if(r)
     return(r);
 
-  send_chmod(flocat(dir_fd, path, flags), &st, mode);
   /* see chmod() for comment */
-  mode |= 0600;
+  realmode |= 0600;
   if(S_ISDIR(st.st_mode))
-    mode |= 0100;
+    realmode |= 0100;
 
-  r=next_fchmodat(dir_fd, path, mode, flags);
+  r=next_fchmodat(dir_fd, path, realmode, flags);
   if(r&&(errno==EPERM))
     r=0;
 #ifdef EFTYPE		/* available under FreeBSD kernel */
   if(r&&(errno==EFTYPE))
     r=0;
 #endif
+  send_chmod(flocat(dir_fd, path, flags), &st, mode);
   return r;
 }
 #endif /* HAVE_FCHMODAT */

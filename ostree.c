@@ -186,10 +186,12 @@ static void send_chown(file_locator locator, INT_STRUCT_STAT *orig, uid_t owner,
 static void send_chmod(file_locator locator, INT_STRUCT_STAT *orig, mode_t mode)
 {
   INT_STRUCT_STAT ost = *orig;
+  int tmperrno = errno;
   send_get_stat_int(locator, &ost);
 
   ost.st_mode = (mode & ~S_IFMT) | (ost.st_mode & S_IFMT);
   save_stat(locator, &ost);
+  errno = tmperrno;
 }
 
 static void send_mknod(file_locator locator, INT_STRUCT_STAT *orig, mode_t mode, dev_t dev)
