@@ -115,7 +115,10 @@ void send_get_stat_int(file_locator locator, INT_STRUCT_STAT *st)
 {
   uint32_t buf[3];
 
-  if (read_ostreemeta(locator, buf) == 0) {
+  if (st->st_mode & S_IRUSR && read_ostreemeta(locator, buf) == 0) {
+    /* We need read permissions to call getxattr, but it's ok if we don't have
+     * them, we almost certainly haven't attached our xattrs to the inode if we
+     * don't as our chmod always | 0600 */
     st->st_uid = ntohl(buf[0]);
     st->st_gid = ntohl(buf[1]);
     st->st_mode = ntohl(buf[2]);
