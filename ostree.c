@@ -39,6 +39,7 @@ static int loc_setxattr(file_locator locator,
     }
   }
   else {
+    int tmperrno;
     int r;
     int fd = openat(locator.dirfd, locator.pathname, locator.flags | O_CLOEXEC);
     if (fd < 0) {
@@ -46,7 +47,9 @@ static int loc_setxattr(file_locator locator,
       return -1;
     }
     r = fsetxattr(fd, name, value, size, flags);
+    tmperrno = errno;
     close (fd);
+    errno = tmperrno;
     return r;
   }
 }
@@ -74,13 +77,16 @@ static ssize_t loc_getxattr(file_locator locator,
   }
   else {
     int r;
+    int tmperrno;
     int fd = openat(locator.dirfd, locator.pathname, locator.flags | O_CLOEXEC);
     if (fd < 0) {
       perror("FAKEROOT: write_ostreemeta failed: Couldn't open locator");
       return -1;
     }
     r = fgetxattr(fd, name, value, size);
+    tmperrno = errno;
     close (fd);
+    errno = tmperrno;
     return r;
   }
 }
