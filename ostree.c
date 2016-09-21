@@ -169,14 +169,18 @@ static void save_stat(file_locator locator, INT_STRUCT_STAT *st)
 
 static void send_chown(file_locator locator, INT_STRUCT_STAT *orig, uid_t owner, gid_t group)
 {
-  INT_STRUCT_STAT ost = *orig;
-  send_get_stat_int(locator, &ost);
+  INT_STRUCT_STAT before = *orig, updated;
+  send_get_stat_int(locator, &before);
+  updated = before;
 
   if (owner != -1)
-    ost.st_uid = owner;
+    updated.st_uid = owner;
   if (group != -1)
-    ost.st_gid = group;
-  save_stat(locator, &ost);
+    updated.st_gid = group;
+
+  /* Only save if changed */
+  if (before.st_uid != updated.st_uid || before.st_gid != updated.st_gid)
+    save_stat(locator, &updated);
 }
 
 static void send_chmod(file_locator locator, INT_STRUCT_STAT *orig, mode_t mode)
