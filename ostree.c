@@ -93,7 +93,7 @@ static ssize_t loc_getxattr(file_locator locator,
 
 static int read_ostreemeta(file_locator locator, uint32_t *buf)
 {
-  unsigned char sbuf[40];
+  unsigned char sbuf[400];
   ssize_t size;
 
   size = loc_getxattr(locator, "user.ostreemeta", sbuf, sizeof (sbuf));
