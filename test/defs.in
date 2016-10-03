@@ -16,8 +16,6 @@ esac
 run_fakeroot ()
 {
   tmp="$tmp"                                    \
-  $PWD/../scripts/fakeroot${tcp}                \
-      -f $PWD/../faked${tcp}                    \
-      -l $PWD/../.libs/${libfakeroot}           \
+  LD_PRELOAD=$PWD/../.libs/${libfakeroot}       \
        "$@"
 }

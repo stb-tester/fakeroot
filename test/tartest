@@ -1,5 +1,5 @@
-#!/bin/sh
-set -e
+#!/bin/sh -x
+set -ex
 echo tartest:
 TMP="$tmp"
 SRCDIR=`cd ${srcdir}; pwd -P`

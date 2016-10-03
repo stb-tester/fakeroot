@@ -20,7 +20,7 @@ echo compare-tar:
 gzip -dc $1 | tar -tvf - |awk '{print $1, $2, $3, $NF}' |sed -e "s/$ROOTGROUP/root/" |cut -c2- |sort > tmp-1
 gzip -dc $2 | tar -tvf - |awk '{print $1, $2, $3, $NF}' |sed -e "s/$ROOTGROUP/root/" |cut -c2- |sort > tmp-2
 
-diff tmp-1 tmp-2 > tmp-diff || true
+diff -u tmp-1 tmp-2 > tmp-diff || true
 
 if test -s tmp-diff; then
   echo tar files differ:

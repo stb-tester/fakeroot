@@ -183,59 +183,7 @@ extern int unsetenv (const char *name);
 #undef __lxstat64
 #undef _FILE_OFFSET_BITS
 
-static void send_get_stat(file_locator locator, struct stat *st)
-{
-  int fd = -1;
-  ssize_t size;
-  unsigned char sbuf[20], *mbuf = NULL;
-  uint32_t buf[3];
-
-  fd = loc_open(locator, O_RDONLY);
-  if (fd < 0)
-    goto nostat;
-  if (fread_ostreemeta(fd, buf) != 0)
-    goto nostat;
-
-  st.st_uid = ntohl(buf[0]);
-  st.st_gid = ntohl(buf[1]);
-  st.st_mode = ntohl(buf[2]);
-out:
-  if (ofd >= 0)
-    close (ofd);
-  return;
-nostat:
-  st.st_uid = 0;
-  st.st_gid = 0;
-  goto out;
-}
-
-static void send_chown(file_locator loc, struct stat *orig, uid_t owner, gid_t group)
-{
-  st->st_uid=owner;
-  st->st_gid=group;
-  INT_SEND_STAT(loc(path), &st, chown_func);
-}
-
-static void send_chmod(file_locator locator, struct stat *orig, const char *path,
-                mode_t mode)
-{
-  st.st_mode=(*mode&ALLPERMS)|(st.st_mode&~ALLPERMS);
-
-  INT_SEND_STAT(locator, &st, chmod_func);
-}
-
-static void send_mknod(file_locator locator, struct stat *st, mode_t mode, dev_t dev)
-{
-  st->st_mode = mode & ~old_mask;
-  st->st_rdev = dev;
-
-  INT_SEND_STAT(loc(pathname), &st,mknod_func);
-}
-
-static void send_unlink(file_locator locator, struct stat *st)
-{
-  INT_SEND_STAT(locator, st, unlink_func);
-}
+#include "ostree.c"
 
 /* Use with stat, chown, etc. */
 static inline file_locator loc(const char* filename)
@@ -941,6 +889,12 @@ int fchown(int fd, uid_t owner, gid_t group){
   INT_STRUCT_STAT st;
   int r;
 
+#ifdef LIBFAKEROOT_DEBUGGING
+  if (fakeroot_debug) {
+    fprintf(stderr, "fchown %i owner %d group %d\n", fd, owner, group);
+  }
+#endif /* LIBFAKEROOT_DEBUGGING */
+
   r=INT_NEXT_FSTAT(fd, &st);
   if(r)
     return r;
@@ -962,6 +916,13 @@ int fchown(int fd, uid_t owner, gid_t group){
 #ifdef HAVE_FCHOWNAT
 int fchownat(int dir_fd, const char *path, uid_t owner, gid_t group, int flags) {
   int r;
+
+#ifdef LIBFAKEROOT_DEBUGGING
+  if (fakeroot_debug) {
+    fprintf(stderr, "fchownat dir_fd %i path %s owner %d group %d flags %x\n", dir_fd, path, owner, group, flags);
+  }
+#endif /* LIBFAKEROOT_DEBUGGING */
+
   /* If AT_SYMLINK_NOFOLLOW is set in the fchownat call it should
      be when we stat it. */
   INT_STRUCT_STAT st;
@@ -2016,7 +1977,7 @@ FTSENT *fts_read(FTS *ftsp) {
             || r->fts_info == FTS_NS || r->fts_info == FTS_NSOK))
     r->fts_statp = NULL;  /* Otherwise fts_statp may be a random pointer */
   if(r && r->fts_statp) {  /* Should we bother checking fts_info here? */
-# if defined(STAT64_SUPPORT) && !defined(__APPLE__)
+# if defined(STAT64_SUPPORT) && !defined(__APPLE__) && _FILE_OFFSET_BITS==64
     SEND_GET_STAT64(loc_fts(r), r->fts_statp, _STAT_VER);
 # else
     SEND_GET_STAT(loc_fts(r), r->fts_statp, _STAT_VER);
@@ -2039,7 +2000,7 @@ FTSENT *fts_children(FTS *ftsp, int options) {
   first=next_fts_children(ftsp, options);
   for(r = first; r; r = r->fts_link) {
     if(r && r->fts_statp) {  /* Should we bother checking fts_info here? */
-# if defined(STAT64_SUPPORT) && !defined(__APPLE__)
+# if defined(STAT64_SUPPORT) && !defined(__APPLE__) && _FILE_OFFSET_BITS==64
       SEND_GET_STAT64(loc_fts(r), r->fts_statp, _STAT_VER);
 # else
       SEND_GET_STAT(loc_fts(r), r->fts_statp, _STAT_VER);

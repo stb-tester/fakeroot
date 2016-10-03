@@ -195,6 +195,7 @@ static const file_locator FILELOC_DUMMY = {-1, 0, 0};
 #include "message.h"
 
 extern const char *env_var_set(const char *env);
+#ifndef FAKEROOT_IPC_OSTREE
 extern void send_stat(const file_locator locator, const struct stat *st, func_id_t f ALPHA_HACK_VERSION_PARAM);
 extern void send_fakem(const file_locator locator, const struct fake_msg *buf);
 extern void send_get_stat(const file_locator locator, struct stat *buf ALPHA_HACK_VERSION_PARAM);
@@ -229,5 +230,6 @@ extern int sem_id;
 #endif /* ! FAKEROOT_FAKENET */
 
 void send_get_fakem(const file_locator locator, struct fake_msg *buf);
+#endif
 
 #endif

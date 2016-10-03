@@ -140,22 +140,6 @@ then
           "nested operation not yet supported"
 fi
 
-unset FAKEROOTKEY
-KEY_PID=`eval $FAKED $FAKEDOPTS $PIPEIN`
-FAKEROOTKEY=`echo $KEY_PID|cut -d: -f1`
-PID=`echo $KEY_PID|cut -d: -f2`
-
-if [ "$WAITINTRAP" -eq 0 ]; then
-  trap "kill -s @signal@ $PID" EXIT INT
-else
-  @MACOSX_FALSE@trap 'FAKEROOTKEY=$FAKEROOTKEY @LDLIBPATHVAR@="$PATHS" @LDPRELOADVAR@="$LIB" /bin/ls -l / >/dev/null 2>&1; while kill -s @signal@ $PID 2>/dev/null; do sleep 0.1; done' EXIT INT
-  @MACOSX_TRUE@trap 'FAKEROOTKEY=$FAKEROOTKEY @LDPRELOADVAR@="$LIB" /bin/ls -l / >/dev/null 2>&1; while kill -s @signal@ $PID 2>/dev/null; do sleep 0.1; done' EXIT INT
-fi
-
-if test -z "$FAKEROOTKEY" || test -z "$PID"; then
-  fatal "error while starting the \`faked' daemon."
-fi
-
 if test $USEABSLIBPATH -ne 0 ; then
   LIB=$ABSLIB
 fi

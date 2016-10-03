@@ -2,6 +2,8 @@ AUTOMAKE_OPTIONS=foreign
 ACLOCAL_AMFLAGS = -I build-aux
 SUBDIRS=scripts doc test
 
+if !FAKEROOT_OSTREE
+LIBCOMMUNICATE=libcommunicate.la
 noinst_LTLIBRARIES = libcommunicate.la libmacosx.la
 if FAKEROOT_FAKENET
 libcommunicate_la_SOURCES = communicate.c communicate-tcp.c
@@ -10,21 +12,24 @@ libcommunicate_la_SOURCES = communicate.c communicate-sysv.c
 endif !FAKEROOT_FAKENET
 
 libmacosx_la_SOURCES = libfakeroot_inode64.c libfakeroot_unix2003.c patchattr.h
+endif
 
 lib_LTLIBRARIES=libfakeroot.la
 libfakeroot_la_SOURCES=libfakeroot.c statconv/glibc/linux/alpha/stats.h wrapdef.h  wrapstruct.h communicate.h
 libfakeroot_la_LDFLAGS=-release 0
 if MACOSX
-libfakeroot_la_DEPENDENCIES=wrapdef.h wrapstruct.h libcommunicate.la libmacosx.la $(LTLIBOBJS)
-libfakeroot_la_LIBADD = libcommunicate.la libmacosx.la $(LTLIBOBJS)
+libfakeroot_la_DEPENDENCIES=wrapdef.h wrapstruct.h $(LIBCOMMUNICATE) libmacosx.la $(LTLIBOBJS)
+libfakeroot_la_LIBADD = $(LIBCOMMUNICATE) libmacosx.la $(LTLIBOBJS)
 else !MACOSX
-libfakeroot_la_DEPENDENCIES=wrapdef.h wrapstruct.h libcommunicate.la $(LTLIBOBJS)
-libfakeroot_la_LIBADD = libcommunicate.la $(LTLIBOBJS)
+libfakeroot_la_DEPENDENCIES=wrapdef.h wrapstruct.h $(LIBCOMMUNICATE) $(LTLIBOBJS)
+libfakeroot_la_LIBADD = $(LIBCOMMUNICATE) $(LTLIBOBJS)
 endif !MACOSX
 
+if !FAKEROOT_OSTREE
 bin_PROGRAMS=faked
 faked_SOURCES = faked.c
 faked_LDADD = libcommunicate.la
+endif
 
 simple_SOURCES=simple.c
 noinst_PROGRAMS=simple

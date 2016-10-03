@@ -58,6 +58,12 @@ AM_CONDITIONAL(FAKEROOT_FAKENET, test x$ac_cv_use_ipc = xtcp)
 
 AC_SUBST(signal)
 
+AH_TEMPLATE([FAKEROOT_OSTREE], [use ostree xattrs instead of a central server])
+if test $ac_cv_use_ipc = "ostree"; then
+AC_DEFINE_UNQUOTED(FAKEROOT_OSTREE, [ostree])
+fi
+AM_CONDITIONAL(FAKEROOT_OSTREE, test x$ac_cv_use_ipc = xostree)
+
 dnl Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
@@ -289,7 +295,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 
 AC_CHECK_FUNCS(fchmodat fchownat fstatat mkdirat mknodat openat renameat unlinkat lchmod fgetattrlist)
 
-AC_CHECK_FUNCS(capset listxattr llistxattr flistxattr getxattr lgetxattr fgetxattr setxattr lsetxattr fsetxattr removexattr lremovexattr fremovexattr)
+dnl AC_CHECK_FUNCS(capset listxattr llistxattr flistxattr getxattr lgetxattr fgetxattr setxattr lsetxattr fsetxattr removexattr lremovexattr fremovexattr)
 
 dnl find out how stat() etc are called. On linux systems, we really
 dnl need to wrap (IIRC):
