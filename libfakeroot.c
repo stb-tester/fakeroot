@@ -1121,7 +1121,7 @@ int WRAP_MKNOD MKNOD_ARG(int ver UNUSED,
 {
   INT_STRUCT_STAT st;
   mode_t old_mask=umask(022);
-  int fd,r;
+  int fd,r, ret = -1;
 
   umask(old_mask);
 
@@ -1132,19 +1132,23 @@ int WRAP_MKNOD MKNOD_ARG(int ver UNUSED,
   fd=open(pathname, O_WRONLY|O_CREAT|O_TRUNC, 00644);
 
   if(fd==-1)
-    return -1;
+    goto err;
 
-  close(fd);
-  /* get the inode, to communicate with faked */
-
-  r=INT_NEXT_LSTAT(pathname, &st);
-
+  r=INT_NEXT_FSTAT(fd, &st);
   if(r)
-    return -1;
+    goto err;
 
-  send_mknod(lloc(pathname), &st, mode, dev);
+  /* get the inode, to communicate with faked */
+  send_mknod(floc(fd), &st, mode, *dev);
 
-  return 0;
+  ret = 0;
+out:
+  if (fd != -1)
+    close(fd);
+  return ret;
+err:
+  ret = -1;
+  goto out;
 }
 
 #ifdef HAVE_FSTATAT
@@ -1156,7 +1160,7 @@ int WRAP_MKNODAT MKNODAT_ARG(int ver UNUSED,
 {
   INT_STRUCT_STAT st;
   mode_t old_mask=umask(022);
-  int fd,r;
+  int fd,r,ret = -1;
 
   umask(old_mask);
 
@@ -1167,21 +1171,20 @@ int WRAP_MKNODAT MKNODAT_ARG(int ver UNUSED,
   fd=openat(dir_fd, pathname, O_WRONLY|O_CREAT|O_TRUNC, 00644);
 
   if(fd==-1)
-    return -1;
+    goto out;
 
-  close(fd);
-  /* get the inode, to communicate with faked */
-
-  /* The only known flag is AT_SYMLINK_NOFOLLOW and
-     we don't want that here. */
-  r=INT_NEXT_FSTATAT(dir_fd, pathname, &st, 0);
-
+  r=INT_NEXT_FSTAT(fd, &st);
   if(r)
-    return -1;
+    goto out;
 
-  send_mknod(flocat(dir_fd, pathname, 0), &st, mode, dev);
+  /* get the inode, to communicate with faked */
+  send_mknod(floc(fd), &st, mode, *dev);
 
-  return 0;
+  ret = 0;
+out:
+  if (fd != -1)
+    close(fd);
+  return ret;
 }
 #endif /* HAVE_MKNODAT */
 #endif /* HAVE_FSTATAT */
