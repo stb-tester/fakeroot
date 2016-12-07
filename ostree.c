@@ -190,7 +190,8 @@ static void send_chmod(file_locator locator, INT_STRUCT_STAT *orig, mode_t mode)
   send_get_stat_int(locator, &ost);
 
   ost.st_mode = (mode & ~S_IFMT) | (ost.st_mode & S_IFMT);
-  save_stat(locator, &ost);
+  if (ost.st_mode != orig->st_mode)
+    save_stat(locator, &ost);
   errno = tmperrno;
 }
 
