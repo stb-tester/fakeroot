@@ -234,3 +234,5 @@ fts_children$INODE64;FTSENT *;(FTS *ftsp, int options);(ftsp, options)
 #ifdef __sun
 sysinfo;int;(int command, char *buf, long count);(command, buf, count)
 #endif
+
+audit_log_acct_message;int;(int audit_fd, int type, const char *pgname, const char *op, const char *name, unsigned int id, const char *host, const char *addr, const char *tty, int result),(audit_fd, type, pgname, op, name, id, host, addr, tty, result)
