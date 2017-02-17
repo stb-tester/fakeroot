@@ -91,20 +91,66 @@ static ssize_t loc_getxattr(file_locator locator,
   }
 }
 
+/*
+ * Useful for debugging
+ */
+static void fprint_file_locator(FILE *stream, file_locator locator)
+{
+  int saved_errno = errno;
+  char buf[PATH_MAX+1] = {0};
+  char fd_path[] = "/proc/self/fd/4000000000";
+
+  if (locator.flags & AT_EMPTY_PATH &&
+      strcmp("", locator.pathname) == 0 &&
+      locator.dirfd != AT_FDCWD) {
+    sprintf(fd_path, "/proc/self/fd/%i", locator.dirfd);
+    if (readlink(fd_path, buf, PATH_MAX) > 0)
+      fprintf(stream, "floc(%i (\"%s\"))", locator.dirfd, buf);
+    else
+      fprintf(stream, "floc(%i (\?\?\?))", locator.dirfd);
+  } else if (locator.dirfd == AT_FDCWD) {
+    if (locator.flags & AT_SYMLINK_NOFOLLOW) {
+      fprintf(stream, "lloc(\"%s\")", locator.pathname);
+    } else {
+      fprintf(stream, "loc(\"%s\")", locator.pathname);
+    }
+  }
+  else {
+    sprintf(fd_path, "/proc/self/fd/%i", locator.dirfd);
+    if (readlink(fd_path, buf, PATH_MAX) > 0)
+      fprintf(stream, "flocat(%i (\"%s\"), \"%s\", %x)", locator.dirfd, buf,
+          locator.pathname, locator.flags);
+    else
+      fprintf(stream, "flocat(%i (\?\?\?), \"%s\", %x)", locator.dirfd, buf,
+          locator.pathname, locator.flags);
+  }
+}
+
 static int read_ostreemeta(file_locator locator, uint32_t *buf)
 {
   unsigned char sbuf[400];
   ssize_t size;
 
   size = loc_getxattr(locator, "user.ostreemeta", sbuf, sizeof (sbuf));
-  if (size > 0 && size >= (ssize_t) 3 * sizeof(uint32_t)) {
-    memcpy (buf, sbuf, 3 * sizeof(uint32_t));
-    return 0;
-  } if (errno == ENODATA) {
+  if (size > 0) {
+    if (size >= (ssize_t) 3 * sizeof(uint32_t)) {
+      memcpy (buf, sbuf, 3 * sizeof(uint32_t));
+      return 0;
+    } else {
+      fprintf(stderr, "FAKEROOT: Warning: File ");
+      fprint_file_locator(stderr, locator);
+      fprintf(stderr, " has user.ostreemeta xattr but it is only %i bytes.  "
+          "Minimum size to hold uid, gid and mode is %i bytes.\n",
+          (int) size, 3 * sizeof(uint32_t));
+    }
+  } else if (errno == ENODATA || errno == ENOTSUP) {
     /* pass */
   } else {
     /* TODO: Handle ERANGE with malloc/retry loop */
-    perror("FAKEROOT: Failed to read stat from fd");
+    int saved_errno = errno;
+    fprintf(stderr, "FAKEROOT: Failed to read stat on file ");
+    fprint_file_locator(stderr, locator);
+    fprintf(stderr, ": %s\n", strerror(saved_errno));
   }
 
   memset(buf, 0, 3 * sizeof(uint32_t));
@@ -163,8 +209,13 @@ static void save_stat(file_locator locator, INT_STRUCT_STAT *st)
   buf[1] = htonl(st->st_gid);
   buf[2] = htonl(st->st_mode);
 
-  if (loc_setxattr(locator, "user.ostreemeta", buf, 3 * sizeof(uint32_t), 0) < 0)
-    perror("FAKEROOT: Failed to update stat on file");
+  if (loc_setxattr(locator, "user.ostreemeta", buf, 3 * sizeof(uint32_t), 0) < 0) {
+    int saved_errno = errno;
+    fprintf(stderr, "FAKEROOT: Failed to update stat on file ");
+    fprint_file_locator(stderr, locator);
+    fprintf(stderr, " to (uid: %u, gid: %u, mode: %o): %s\n",
+        buf[0], buf[1], (int) buf[2], strerror(saved_errno));
+  }
 }
 
 static void send_chown(file_locator locator, INT_STRUCT_STAT *orig, uid_t owner, gid_t group)
